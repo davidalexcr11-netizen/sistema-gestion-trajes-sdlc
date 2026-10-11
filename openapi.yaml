@@ -1,0 +1,515 @@
+openapi: 3.0.3
+info:
+  title: API Sistema de Gestión para Venta y Alquiler de Trajes Formales
+  description: >
+    Especificación de la API REST para el control integral de clientes, inventario de trajes,
+    ventas, alquileres, devoluciones y pagos. Diseñada con asistencia de IA y refinada
+    conforme a las mejores prácticas de la industria y estándares RESTful.
+  version: 1.0.0
+  contact:
+    name: Equipo de Desarrollo SDLC
+    email: equipo-desarrollo@ejemplo.com
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Servidor de Desarrollo Local
+  - url: https://api-trajes.onrender.com/api/v1
+    description: Ambiente de Staging / Producción
+
+paths:
+  /clientes:
+    post:
+      summary: Registrar nuevo cliente
+      description: Registra un nuevo cliente validando la unicidad del documento y correo electrónico (RF-01).
+      operationId: registrarCliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClienteCreate'
+      responses:
+        '201':
+          description: Cliente registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClienteResponse'
+        '400':
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflicto - Identificación o correo ya registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Listar clientes
+      description: Obtiene la lista de clientes registrados con soporte de búsqueda.
+      operationId: listarClientes
+      parameters:
+        - name: query
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filtro por nombre o identificación
+      responses:
+        '200':
+          description: Lista de clientes obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClienteResponse'
+
+  /trajes/disponibilidad:
+    get:
+      summary: Consultar y filtrar disponibilidad de trajes
+      description: Consulta trajes según filtros de tipo, talla, color y estado de disponibilidad (RF-03, RF-06).
+      operationId: consultarDisponibilidadTrajes
+      parameters:
+        - name: tipo
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Esmoquin
+        - name: talla
+          in: query
+          required: false
+          schema:
+            type: string
+          example: M
+        - name: color
+          in: query
+          required: false
+          schema:
+            type: string
+          example: Negro
+        - name: solo_disponibles
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: Si es true, retorna solo trajes con estado DISPONIBLE
+      responses:
+        '200':
+          description: Trajes coincidentes con los filtros
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TrajeResponse'
+
+  /ventas:
+    post:
+      summary: Registrar venta de trajes
+      description: Registra la venta de uno o más trajes a un cliente y actualiza el inventario a VENDIDO (RF-04, RF-06).
+      operationId: registrarVenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VentaCreate'
+      responses:
+        '201':
+          description: Venta registrada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VentaResponse'
+        '400':
+          description: Traje no disponible para venta o cliente inexistente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente o traje no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /alquileres:
+    post:
+      summary: Registrar alquiler de traje
+      description: >
+        Registra el alquiler de un traje verificando disponibilidad previa,
+        fechas coherentes y actualiza el estado a ALQUILADO (RF-05, RF-06).
+      operationId: registrarAlquiler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlquilerCreate'
+      responses:
+        '201':
+          description: Alquiler registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlquilerResponse'
+        '400':
+          description: Fechas inconsistentes o traje no disponible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente o traje no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /devoluciones:
+    post:
+      summary: Registrar devolución de traje alquilado
+      description: >
+        Registra la recepción física del traje, evalúa su estado,
+        calcula posibles recargos/multas y restablece el estado del traje (RF-07).
+      operationId: registrarDevolucion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevolucionCreate'
+      responses:
+        '201':
+          description: Devolución registrada y traje actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '400':
+          description: El alquiler ya fue devuelto o se encuentra cancelado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Alquiler no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /pagos:
+    post:
+      summary: Registrar pago de venta o alquiler
+      description: Registra el pago monetario asociándolo a la venta o alquiler correspondiente (RF-08).
+      operationId: registrarPago
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PagoCreate'
+      responses:
+        '201':
+          description: Pago procesado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagoResponse'
+        '400':
+          description: Monto no válido o transacción ya saldada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ClienteCreate:
+      type: object
+      required:
+        - identificacion
+        - nombres
+        - apellidos
+        - telefono
+        - email
+      properties:
+        identificacion:
+          type: string
+          example: "0923456789"
+        nombres:
+          type: string
+          example: "Carlos Alberto"
+        apellidos:
+          type: string
+          example: "Mendoza Silva"
+        telefono:
+          type: string
+          example: "+593987654321"
+        email:
+          type: string
+          format: email
+          example: "carlos.mendoza@email.com"
+
+    ClienteResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        identificacion:
+          type: string
+          example: "0923456789"
+        nombres:
+          type: string
+          example: "Carlos Alberto"
+        apellidos:
+          type: string
+          example: "Mendoza Silva"
+        telefono:
+          type: string
+          example: "+593987654321"
+        email:
+          type: string
+          example: "carlos.mendoza@email.com"
+        fecha_registro:
+          type: string
+          format: date-time
+
+    TrajeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 10
+        codigo:
+          type: string
+          example: "TRJ-ESM-001"
+        tipo:
+          type: string
+          example: "Esmoquin"
+        talla:
+          type: string
+          example: "M"
+        color:
+          type: string
+          example: "Negro"
+        precio_venta:
+          type: number
+          format: float
+          example: 220.00
+        precio_alquiler:
+          type: number
+          format: float
+          example: 45.00
+        estado:
+          type: string
+          enum: [DISPONIBLE, ALQUILADO, VENDIDO, MANTENIMIENTO]
+          example: "DISPONIBLE"
+
+    VentaCreate:
+      type: object
+      required:
+        - cliente_id
+        - traje_ids
+      properties:
+        cliente_id:
+          type: integer
+          example: 1
+        traje_ids:
+          type: array
+          items:
+            type: integer
+          example: [10, 11]
+        empleado_responsable:
+          type: string
+          example: "Juan Pérez"
+
+    VentaResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 5
+        cliente_id:
+          type: integer
+          example: 1
+        fecha_venta:
+          type: string
+          format: date-time
+        total:
+          type: number
+          format: float
+          example: 450.00
+        estado:
+          type: string
+          example: "COMPLETADA"
+
+    AlquilerCreate:
+      type: object
+      required:
+        - cliente_id
+        - traje_id
+        - fecha_alquiler
+        - fecha_devolucion_prevista
+      properties:
+        cliente_id:
+          type: integer
+          example: 1
+        traje_id:
+          type: integer
+          example: 10
+        fecha_alquiler:
+          type: string
+          format: date
+          example: "2026-10-15"
+        fecha_devolucion_prevista:
+          type: string
+          format: date
+          example: "2026-10-18"
+        deposito_garantia:
+          type: number
+          format: float
+          default: 30.00
+          example: 30.00
+
+    AlquilerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 8
+        cliente_id:
+          type: integer
+          example: 1
+        traje_id:
+          type: integer
+          example: 10
+        fecha_alquiler:
+          type: string
+          format: date
+        fecha_devolucion_prevista:
+          type: string
+          format: date
+        valor_alquiler:
+          type: number
+          format: float
+          example: 45.00
+        deposito_garantia:
+          type: number
+          format: float
+          example: 30.00
+        estado:
+          type: string
+          example: "ACTIVO"
+
+    DevolucionCreate:
+      type: object
+      required:
+        - alquiler_id
+        - estado_traje_devuelto
+      properties:
+        alquiler_id:
+          type: integer
+          example: 8
+        estado_traje_devuelto:
+          type: string
+          enum: [BUENO, CON_DETALLES, DANIADO, INSERVIBLE]
+          example: "BUENO"
+        costo_adicional_multa:
+          type: number
+          format: float
+          default: 0.00
+          example: 0.00
+        observaciones:
+          type: string
+          example: "Prenda devuelta a tiempo y en óptimo estado."
+
+    DevolucionResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 3
+        alquiler_id:
+          type: integer
+          example: 8
+        fecha_devolucion_real:
+          type: string
+          format: date-time
+        estado_traje_devuelto:
+          type: string
+          example: "BUENO"
+        costo_adicional_multa:
+          type: number
+          format: float
+          example: 0.00
+        observaciones:
+          type: string
+          example: "Prenda devuelta a tiempo y en óptimo estado."
+
+    PagoCreate:
+      type: object
+      required:
+        - cliente_id
+        - monto
+        - metodo_pago
+      properties:
+        cliente_id:
+          type: integer
+          example: 1
+        venta_id:
+          type: integer
+          nullable: true
+          example: 5
+        alquiler_id:
+          type: integer
+          nullable: true
+          example: null
+        monto:
+          type: number
+          format: float
+          example: 450.00
+        metodo_pago:
+          type: string
+          enum: [EFECTIVO, TARJETA_DEBITO, TARJETA_CREDITO, TRANSFERENCIA]
+          example: "TARJETA_CREDITO"
+
+    PagoResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12
+        cliente_id:
+          type: integer
+          example: 1
+        monto:
+          type: number
+          format: float
+          example: 450.00
+        metodo_pago:
+          type: string
+          example: "TARJETA_CREDITO"
+        estado:
+          type: string
+          example: "COMPLETADO"
+        fecha_pago:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "El traje no se encuentra disponible para alquiler."
